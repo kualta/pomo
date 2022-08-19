@@ -1,3 +1,4 @@
+use async_std::task::sleep;
 use dioxus::{core::to_owned, prelude::*};
 use instant::*;
 use std::{fmt::Display, ops::Add};
@@ -33,7 +34,10 @@ impl PomoTimer {
 
     fn time_left(&self) -> Duration {
         let now = Instant::now();
-        self.deadline.duration_since(now)
+        match self.deadline.checked_duration_since(now) {
+            Some(time_left) => time_left,
+            None => Duration::from_secs(0),
+        }
     }
 
     fn pause(&mut self) {
@@ -54,16 +58,30 @@ impl PomoTimer {
             }
             TimerState::Inactive => {
                 self.deadline = Instant::now() + self.work_duration;
-            },
-            TimerState::Working => {
-                return
             }
-            TimerState::Resting => {
-                return
-            },
+            TimerState::Working => return,
+            TimerState::Resting => return,
         };
 
         self.state = TimerState::Working;
+    }
+
+    fn update(&mut self) {
+        let time_left = self.time_left();
+        if !time_left.is_zero() {
+            return;
+        }
+        self.deadline = match self.state {
+            TimerState::Working => { 
+                self.state = TimerState::Resting;
+                Instant::now() + self.rest_duration 
+            },
+            TimerState::Resting => { 
+                self.state = TimerState::Working;
+                Instant::now() + self.work_duration 
+            },
+            _ => return,
+        }
     }
 }
 impl Display for PomoTimer {
@@ -71,7 +89,12 @@ impl Display for PomoTimer {
         let time_left = match self.state {
             TimerState::Working => self.time_left(),
             TimerState::Resting => self.time_left(),
-            TimerState::Paused(paused_at) => self.deadline.duration_since(paused_at),
+            TimerState::Paused(paused_at) => {
+                match self.deadline.checked_duration_since(paused_at) {
+                    Some(duration) => duration,
+                    None => Duration::from_secs(0),
+                }
+            }
             TimerState::Inactive => Duration::from_secs(0),
         };
 
@@ -81,35 +104,29 @@ impl Display for PomoTimer {
     }
 }
 
-fn main() {
-    dioxus::web::launch(app);
-}
-
 fn app(cx: Scope) -> Element {
     let timer = use_state(&cx, || {
-        PomoTimer::new(Duration::from_secs(60 * 25), Duration::from_secs(60 * 5))
+        PomoTimer::new(Duration::from_secs(6), Duration::from_secs(10))
     });
 
     let _: &CoroutineHandle<()> = use_coroutine(&cx, {
         to_owned![timer];
         |_| async move {
             loop {
+                timer.make_mut().update();
                 timer.needs_update();
-                async_std::task::sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_secs(1)).await;
             }
         }
     });
 
     cx.render(rsx!(
         h1 { "{timer}" }
-        
-        button { 
-            onclick: |evt| timer.make_mut().pause(),
-            "Pause"
-        }
-        button { 
-            onclick: |evt| timer.make_mut().resume(),
-            "Resume"
-        }
+        button { onclick: |_| timer.make_mut().pause(), "Pause" }
+        button { onclick: |_| timer.make_mut().resume(), "Resume" }
     ))
+}
+
+fn main() {
+    dioxus::web::launch(app);
 }
