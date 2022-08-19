@@ -72,14 +72,14 @@ impl PomoTimer {
             return;
         }
         self.deadline = match self.state {
-            TimerState::Working => { 
+            TimerState::Working => {
                 self.state = TimerState::Resting;
-                Instant::now() + self.rest_duration 
-            },
-            TimerState::Resting => { 
+                Instant::now() + self.rest_duration
+            }
+            TimerState::Resting => {
                 self.state = TimerState::Working;
-                Instant::now() + self.work_duration 
-            },
+                Instant::now() + self.work_duration
+            }
             _ => return,
         }
     }
@@ -104,29 +104,69 @@ impl Display for PomoTimer {
     }
 }
 
-fn app(cx: Scope) -> Element {
+fn App(cx: Scope) -> Element {
+    cx.render(rsx! (
+        body {
+            Timer {}
+        }
+    ))
+}
+
+fn Timer(cx: Scope) -> Element {
     let timer = use_state(&cx, || {
-        PomoTimer::new(Duration::from_secs(6), Duration::from_secs(10))
+        PomoTimer::new(Duration::from_secs(60 * 25), Duration::from_secs(60 * 5))
     });
 
-    let _: &CoroutineHandle<()> = use_coroutine(&cx, {
+    fixed_update(cx, timer);
+
+    cx.render(rsx! (
+        div {
+            head { link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" } }
+            body {
+                class: "flex justify-center items-center h-screen bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
+                div { 
+                    class: "w-96 items-center",
+                    h1 { 
+                        class: "font-extrabold font-sans text-transparent text-8xl 
+                                bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600",
+                        "{timer}" 
+                    }
+                    br {}
+                    button { 
+                        class: "w-1/3 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                                font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                                mr-2 mb-2 dark:border-gray-600 dark:text-gray-400 
+                                dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                        onclick: |_| timer.make_mut().pause(), 
+                        "Pause" 
+                    }
+                    button { 
+                        class: "w-1/3 text-purple-500 hover:text-purple-700 border 
+                                border-purple-500 focus:outline-none 
+                                font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                                mr-2 mb-2 dark:border-purple-400 dark:text-purple-400 
+                                dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
+                        onclick: |_| timer.make_mut().resume(), 
+                        "Resume" 
+                    }
+                }
+            }
+        }
+    ))
+}
+
+fn fixed_update(cx: Scope, timer: &UseState<PomoTimer>) {
+    use_coroutine(&cx, {
         to_owned![timer];
-        |_| async move {
+        |_: UnboundedReceiver<()>| async move {
             loop {
                 timer.make_mut().update();
-                timer.needs_update();
                 sleep(Duration::from_secs(1)).await;
             }
         }
     });
-
-    cx.render(rsx!(
-        h1 { "{timer}" }
-        button { onclick: |_| timer.make_mut().pause(), "Pause" }
-        button { onclick: |_| timer.make_mut().resume(), "Resume" }
-    ))
 }
 
 fn main() {
-    dioxus::web::launch(app);
+    dioxus::web::launch(App);
 }
