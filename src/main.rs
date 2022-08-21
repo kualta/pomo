@@ -1,14 +1,15 @@
+#![allow(unused, dead_code, non_snake_case)]
+
 use async_std::task::sleep;
 use dioxus::{core::to_owned, prelude::*};
 use instant::*;
-use std::{fmt::Display, ops::Add};
+use std::fmt::Display;
 
 #[derive(Clone, Copy)]
 enum TimerState {
     Working,
     Resting,
     Paused(Instant),
-    Inactive,
 }
 
 #[derive(Clone, Copy)]
@@ -18,10 +19,11 @@ struct PomoTimer {
     deadline: Instant,
     state: TimerState,
 }
+
 impl PomoTimer {
     fn new(work_duration: Duration, rest_duration: Duration) -> Self {
         let deadline = match Instant::now().checked_add(work_duration) {
-            Some(t) => t,
+            Some(time) => time,
             None => Instant::now(),
         };
         PomoTimer {
@@ -33,19 +35,17 @@ impl PomoTimer {
     }
 
     fn time_left(&self) -> Duration {
-        let now = Instant::now();
-        match self.deadline.checked_duration_since(now) {
+        match self.deadline.checked_duration_since(Instant::now()) {
             Some(time_left) => time_left,
             None => Duration::from_secs(0),
         }
     }
 
     fn pause(&mut self) {
-        match self.state {
-            TimerState::Paused(_) => return,
-            TimerState::Inactive => return,
-            _ => {}
+        if let TimerState::Paused(_) = self.state { 
+            return; 
         }
+
         self.state = TimerState::Paused(Instant::now());
     }
 
@@ -56,11 +56,7 @@ impl PomoTimer {
                     .checked_duration_since(paused_at)
                     .unwrap_or(Duration::from_secs(0));
             }
-            TimerState::Inactive => {
-                self.deadline = Instant::now() + self.work_duration;
-            }
-            TimerState::Working => return,
-            TimerState::Resting => return,
+            _ => return,
         };
 
         self.state = TimerState::Working;
@@ -95,20 +91,17 @@ impl Display for PomoTimer {
                     None => Duration::from_secs(0),
                 }
             }
-            TimerState::Inactive => Duration::from_secs(0),
         };
 
         let minutes_left = time_left.as_secs() / 60;
         let secs_left = time_left.as_secs() % 60;
-        write!(f, "{}:{}", minutes_left, secs_left)
+        write!(f, "{}:{:0>2}", minutes_left, secs_left)
     }
 }
 
 fn App(cx: Scope) -> Element {
     cx.render(rsx! (
-        body {
-            Timer {}
-        }
+        Timer {}
     ))
 }
 
@@ -121,7 +114,8 @@ fn Timer(cx: Scope) -> Element {
 
     cx.render(rsx! (
         div {
-            head { link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" } }
+            class: "text-center",
+            link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
             body {
                 class: "flex justify-center items-center h-screen bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
                 div { 
