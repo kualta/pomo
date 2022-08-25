@@ -100,65 +100,64 @@ impl Display for PomoTimer {
 }
 
 fn App(cx: Scope) -> Element {
+    use_context_provider::<PomoTimer>(&cx, || { 
+        PomoTimer::new(Duration::from_secs(25 * 60), Duration::from_secs(5 * 60)) 
+    });
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+
     cx.render(rsx! (
-        Timer {}
+        title { "Pomo Timer" }
+        link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
+        body {
+            class: "text-center flex justify-center items-center h-screen 
+                    bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
+            div { 
+                class: "w-96 items-center",
+                Timer { }
+                TimerControls { }
+            }
+        }
+    ))
+}
+
+fn TimerControls(cx: Scope) -> Element {
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+
+    cx.render(rsx! (
+        div { 
+            class: "p-2",
+            button { 
+                class: "w-1/3 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                        mr-2 mb-2 dark:border-gray-600 dark:text-gray-400 
+                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                onclick: move |_| shared_timer.write().pause(), 
+                "Pause" 
+            }
+            button { 
+                class: "w-1/3 text-purple-500 hover:text-purple-700 border 
+                        border-purple-500 focus:outline-none 
+                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                        mr-2 mb-2 dark:border-purple-400 dark:text-purple-400 
+                        dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
+                onclick: move |_| shared_timer.write().resume(), 
+                "Resume" 
+            }
+        }
     ))
 }
 
 fn Timer(cx: Scope) -> Element {
-    let timer = use_state(&cx, || {
-        PomoTimer::new(Duration::from_secs(60 * 25), Duration::from_secs(60 * 5))
-    });
-
-    fixed_update(cx, timer);
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+    let mut timer = shared_timer.write();
 
     cx.render(rsx! (
-        div {
-            class: "text-center",
-            link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
-            body {
-                class: "flex justify-center items-center h-screen bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
-                div { 
-                    class: "w-96 items-center",
-                    h1 { 
-                        class: "font-extrabold font-sans text-transparent text-8xl 
-                                bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600",
-                        "{timer}" 
-                    }
-                    br {}
-                    button { 
-                        class: "w-1/3 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                                font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                                mr-2 mb-2 dark:border-gray-600 dark:text-gray-400 
-                                dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
-                        onclick: |_| timer.make_mut().pause(), 
-                        "Pause" 
-                    }
-                    button { 
-                        class: "w-1/3 text-purple-500 hover:text-purple-700 border 
-                                border-purple-500 focus:outline-none 
-                                font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                                mr-2 mb-2 dark:border-purple-400 dark:text-purple-400 
-                                dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
-                        onclick: |_| timer.make_mut().resume(), 
-                        "Resume" 
-                    }
-                }
-            }
+        h1 { 
+            class: "font-extrabold font-sans text-transparent text-8xl 
+                    bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600",
+            "{timer}" 
         }
     ))
-}
-
-fn fixed_update(cx: Scope, timer: &UseState<PomoTimer>) {
-    use_coroutine(&cx, {
-        to_owned![timer];
-        |_: UnboundedReceiver<()>| async move {
-            loop {
-                timer.make_mut().update();
-                sleep(Duration::from_secs(1)).await;
-            }
-        }
-    });
 }
 
 fn main() {
