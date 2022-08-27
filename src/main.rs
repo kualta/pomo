@@ -4,6 +4,9 @@ use async_std::task::sleep;
 use dioxus::{core::to_owned, prelude::*};
 use instant::*;
 use std::fmt::Display;
+use web_sys::HtmlAudioElement;
+
+const PUBLIC_URL: &str = "/Pomodoro/";
 
 #[derive(Clone, Copy)]
 enum TimerState {
@@ -63,10 +66,13 @@ impl PomoTimer {
     }
 
     fn update(&mut self) {
-        let time_left = self.time_left();
-        if !time_left.is_zero() {
-            return;
+        if self.time_left().is_zero() {
+            self.flip();
         }
+    }
+
+    /// Flips the state of this [`PomoTimer`] and extends the deadline 
+    fn flip(&mut self) {
         self.deadline = match self.state {
             TimerState::Working => {
                 self.state = TimerState::Resting;
@@ -77,7 +83,13 @@ impl PomoTimer {
                 Instant::now() + self.work_duration
             }
             _ => return,
-        }
+        };
+        self.ring();
+    }
+
+    fn ring(&self) {
+        let bell_path = PUBLIC_URL.to_owned() + "assets/bell.mp3";
+        HtmlAudioElement::new_with_src(&bell_path).unwrap().play().unwrap();
     }
 }
 impl Display for PomoTimer {
@@ -105,9 +117,9 @@ fn App(cx: Scope) -> Element {
     });
     let shared_timer = use_context::<PomoTimer>(&cx)?;
 
+    shared_timer.write().update();
+
     cx.render(rsx! (
-        title { "Pomo Timer" }
-        link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
         body {
             class: "text-center flex justify-center items-center h-screen 
                     bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
