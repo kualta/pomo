@@ -42,9 +42,12 @@ impl PomoTimer {
             TimerState::Working | 
             TimerState::Resting => return,
             TimerState::Inactive => {
-                self.deadline = Instant::now()
-                    .checked_add(self.work_duration)
-                    .unwrap_or_else(Instant::now);
+                if let Duration::ZERO = self.work_duration {
+                    return
+                }
+                if let Some(deadline) = Instant::now().checked_add(self.work_duration) {
+                    self.deadline = deadline;
+                }
             }
             TimerState::Paused(paused_at) => {
                 self.deadline += Instant::now()
@@ -147,20 +150,14 @@ fn App(cx: Scope) -> Element {
 
     timer.update();
 
-    let Controls = if let (TimerState::Inactive) = timer.state {
-        StartControls
-    } else {
-        TimerControls
-    };
-
     cx.render(rsx! (
         body {
             class: "text-center flex justify-center items-center h-screen 
                     bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
             div { 
-                class: "w-96 items-center",
+                class: "w-96 items-center p-1",
                 Timer { }
-                Controls { }
+                TimerControls { }
             }
         }
     ))
@@ -168,61 +165,66 @@ fn App(cx: Scope) -> Element {
 
 fn TimerControls(cx: Scope) -> Element {
     let shared_timer = use_context::<PomoTimer>(&cx)?;
+    let state = shared_timer.write().state;
+
+    let Controls = match state {
+        TimerState::Inactive => {
+            rsx!(
+                button { 
+                    class: "w-12 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            m-1 dark:border-gray-600 dark:text-gray-400 
+                            dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                    onclick: move |_| shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)), 
+                    "-" 
+                }
+                button { 
+                    class: "w-1/2 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
+                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            m-1 dark:border-purple-400 dark:text-purple-400 
+                            dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
+                    onclick: move |_| shared_timer.write().start(), 
+                    "Start" 
+                }
+                button { 
+                    class: "w-12 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            m-1 dark:border-gray-600 dark:text-gray-400 
+                            dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                    onclick: move |_| shared_timer.write().increase_duration(Duration::from_secs(5 * 60)), 
+                    "+" 
+                }
+            )
+        },
+        TimerState::Working |
+        TimerState::Resting => {
+            rsx!(
+                button { 
+                    class: "w-1/2 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            m-1 dark:border-gray-600 dark:text-gray-400 
+                            dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                    onclick: move |_| shared_timer.write().stop(), 
+                    "Pause" 
+                }
+            )
+        },
+        TimerState::Paused(_) => {
+            rsx!(
+                button { 
+                    class: "w-1/2 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
+                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            m-1 dark:border-purple-400 dark:text-purple-400 
+                            dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
+                    onclick: move |_| shared_timer.write().start(), 
+                    "Resume" 
+                }
+            )
+        },
+    };
 
     cx.render(rsx! (
-        div { 
-            class: "p-1",
-            button { 
-                class: "w-1/3 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        m-1 dark:border-gray-600 dark:text-gray-400 
-                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
-                onclick: move |_| shared_timer.write().stop(), 
-                "Pause" 
-            }
-            button { 
-                class: "w-1/3 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
-                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        m-1 dark:border-purple-400 dark:text-purple-400 
-                        dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
-                onclick: move |_| shared_timer.write().start(), 
-                "Resume" 
-            }
-        }
-    ))
-}
-
-fn StartControls(cx: Scope) -> Element {
-    let shared_timer = use_context::<PomoTimer>(&cx)?;
-
-    cx.render(rsx! (
-        div { 
-            class: "p-1",
-            button { 
-                class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        m-1 dark:border-gray-600 dark:text-gray-400 
-                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
-                onclick: move |_| shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)), 
-                "-" 
-            }
-            button { 
-                class: "w-40 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
-                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        m-1 dark:border-purple-400 dark:text-purple-400 
-                        dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
-                onclick: move |_| shared_timer.write().start(), 
-                "Start" 
-            }
-            button { 
-                class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        m-1 dark:border-gray-600 dark:text-gray-400 
-                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
-                onclick: move |_| shared_timer.write().increase_duration(Duration::from_secs(5 * 60)), 
-                "+" 
-            }
-        }
+        Controls
     ))
 }
 
