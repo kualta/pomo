@@ -6,6 +6,6 @@
   <h3><code>> <a href="https://lectromoe.github.io/Pomodoro">Use Online</a> <</code></h3>
   <br>
 
-  <img src="https://user-images.githubusercontent.com/72769566/185759317-7c7e1e65-f115-483c-93fc-ca6bbd6b190d.png" width="700" align="center">
+  <img src="https://user-images.githubusercontent.com/72769566/185759317-7c7e1e65-f115-483c-93fc-ca6bbd6b190d.png" width="600" align="center">
 
 </div>
