@@ -1,2 +1,3 @@
 [build]
 public_url = "/Pomodoro/"
+filehash = false

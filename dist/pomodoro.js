@@ -931,20 +931,20 @@ imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
 imports.wbg.__wbindgen_throw = function(arg0, arg1) {
     throw new Error(getStringFromWasm0(arg0, arg1));
 };
-imports.wbg.__wbindgen_closure_wrapper311 = function(arg0, arg1, arg2) {
-    const ret = makeMutClosure(arg0, arg1, 100, __wbg_adapter_18);
+imports.wbg.__wbindgen_closure_wrapper329 = function(arg0, arg1, arg2) {
+    const ret = makeMutClosure(arg0, arg1, 113, __wbg_adapter_18);
     return addHeapObject(ret);
 };
-imports.wbg.__wbindgen_closure_wrapper313 = function(arg0, arg1, arg2) {
-    const ret = makeClosure(arg0, arg1, 100, __wbg_adapter_21);
+imports.wbg.__wbindgen_closure_wrapper331 = function(arg0, arg1, arg2) {
+    const ret = makeClosure(arg0, arg1, 113, __wbg_adapter_21);
     return addHeapObject(ret);
 };
-imports.wbg.__wbindgen_closure_wrapper1421 = function(arg0, arg1, arg2) {
-    const ret = makeMutClosure(arg0, arg1, 288, __wbg_adapter_24);
+imports.wbg.__wbindgen_closure_wrapper1439 = function(arg0, arg1, arg2) {
+    const ret = makeMutClosure(arg0, arg1, 301, __wbg_adapter_24);
     return addHeapObject(ret);
 };
-imports.wbg.__wbindgen_closure_wrapper1437 = function(arg0, arg1, arg2) {
-    const ret = makeMutClosure(arg0, arg1, 299, __wbg_adapter_27);
+imports.wbg.__wbindgen_closure_wrapper1455 = function(arg0, arg1, arg2) {
+    const ret = makeMutClosure(arg0, arg1, 312, __wbg_adapter_27);
     return addHeapObject(ret);
 };
 
@@ -978,7 +978,7 @@ function initSync(bytes) {
 
 async function init(input) {
     if (typeof input === 'undefined') {
-        input = new URL('pomodoro-fa0b54e39e8aad2b_bg.wasm', import.meta.url);
+        input = new URL('pomodoro_bg.wasm', import.meta.url);
     }
     const imports = getImports();
 

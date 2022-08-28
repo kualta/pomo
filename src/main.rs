@@ -3,6 +3,7 @@
 use async_std::task::sleep;
 use dioxus::{core::to_owned, prelude::*};
 use instant::*;
+use wasm_bindgen::__rt::Start;
 use std::fmt::Display;
 use web_sys::HtmlAudioElement;
 
@@ -10,6 +11,7 @@ const PUBLIC_URL: &str = "/Pomodoro/";
 
 #[derive(Clone, Copy)]
 enum TimerState {
+    Inactive,
     Working,
     Resting,
     Paused(Instant),
@@ -25,50 +27,70 @@ struct PomoTimer {
 
 impl PomoTimer {
     fn new(work_duration: Duration, rest_duration: Duration) -> Self {
-        let deadline = match Instant::now().checked_add(work_duration) {
-            Some(time) => time,
-            None => Instant::now(),
-        };
+        let deadline = Instant::now().checked_add(work_duration).unwrap_or_else(Instant::now);
+
         PomoTimer {
             work_duration,
             rest_duration,
             deadline,
-            state: TimerState::Working,
+            state: TimerState::Inactive,
         }
     }
 
-    fn time_left(&self) -> Duration {
-        match self.deadline.checked_duration_since(Instant::now()) {
-            Some(time_left) => time_left,
-            None => Duration::from_secs(0),
-        }
-    }
-
-    fn pause(&mut self) {
-        if let TimerState::Paused(_) = self.state { 
-            return; 
-        }
-
-        self.state = TimerState::Paused(Instant::now());
-    }
-
-    fn resume(&mut self) {
+    fn start(&mut self) {
         match self.state {
+            TimerState::Working | 
+            TimerState::Resting => return,
+            TimerState::Inactive => {
+                self.deadline = Instant::now()
+                    .checked_add(self.work_duration)
+                    .unwrap_or_else(Instant::now);
+            }
             TimerState::Paused(paused_at) => {
                 self.deadline += Instant::now()
                     .checked_duration_since(paused_at)
-                    .unwrap_or(Duration::from_secs(0));
+                    .unwrap_or(Duration::ZERO);
             }
-            _ => return,
         };
+        // FIXME: Incorrect if paused during rest
+        self.state = TimerState::Working; 
+    }
 
-        self.state = TimerState::Working;
+    fn stop(&mut self) {
+        match self.state {
+            TimerState::Working |
+            TimerState::Resting => self.state = TimerState::Paused(Instant::now()),
+            _ => ()
+        }
     }
 
     fn update(&mut self) {
         if self.time_left().is_zero() {
             self.flip();
         }
+    }
+
+    fn time_left(&self) -> Duration {
+        match self.deadline.checked_duration_since(Instant::now()) {
+            Some(time_left) => time_left,
+            None => Duration::ZERO,
+        }
+    }
+
+    /// Increases work duration of this [`PomoTimer`].
+    /// 
+    /// Rest duration is defined as `1/5` of the work duration
+    fn increase_duration(&mut self, increase: Duration) {
+        self.work_duration = self.work_duration.checked_add(increase).unwrap_or(Duration::MAX);
+        self.rest_duration = self.work_duration / 5; 
+    }
+
+    /// Decreases work duration of this [`PomoTimer`].
+    /// 
+    /// Rest duration is defined as `1/5` of the work duration
+    fn decrease_duration(&mut self, decrease: Duration) {
+        self.work_duration = self.work_duration.checked_sub(decrease).unwrap_or(Duration::ZERO);
+        self.rest_duration = self.work_duration / 5; 
     }
 
     /// Flips the state of this [`PomoTimer`] and extends the deadline 
@@ -82,6 +104,10 @@ impl PomoTimer {
                 self.state = TimerState::Working;
                 Instant::now() + self.work_duration
             }
+            TimerState::Inactive => {
+                self.state = TimerState::Working;
+                Instant::now() + self.work_duration
+            }
             _ => return,
         };
         self.ring();
@@ -92,21 +118,22 @@ impl PomoTimer {
         HtmlAudioElement::new_with_src(&bell_path).unwrap().play().unwrap();
     }
 }
+
 impl Display for PomoTimer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let time_left = match self.state {
-            TimerState::Working => self.time_left(),
-            TimerState::Resting => self.time_left(),
             TimerState::Paused(paused_at) => {
                 match self.deadline.checked_duration_since(paused_at) {
                     Some(duration) => duration,
-                    None => Duration::from_secs(0),
+                    None => Duration::ZERO,
                 }
             }
+            TimerState::Inactive => self.work_duration,
+            _ => self.time_left(),
         };
-
         let minutes_left = time_left.as_secs() / 60;
         let secs_left = time_left.as_secs() % 60;
+
         write!(f, "{}:{:0>2}", minutes_left, secs_left)
     }
 }
@@ -116,8 +143,15 @@ fn App(cx: Scope) -> Element {
         PomoTimer::new(Duration::from_secs(25 * 60), Duration::from_secs(5 * 60)) 
     });
     let shared_timer = use_context::<PomoTimer>(&cx)?;
+    let mut timer = shared_timer.write();
 
-    shared_timer.write().update();
+    timer.update();
+
+    let Controls = if let (TimerState::Inactive) = timer.state {
+        StartControls
+    } else {
+        TimerControls
+    };
 
     cx.render(rsx! (
         body {
@@ -126,7 +160,7 @@ fn App(cx: Scope) -> Element {
             div { 
                 class: "w-96 items-center",
                 Timer { }
-                TimerControls { }
+                Controls { }
             }
         }
     ))
@@ -137,23 +171,56 @@ fn TimerControls(cx: Scope) -> Element {
 
     cx.render(rsx! (
         div { 
-            class: "p-2",
+            class: "p-1",
             button { 
                 class: "w-1/3 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
                         font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        mr-2 mb-2 dark:border-gray-600 dark:text-gray-400 
+                        m-1 dark:border-gray-600 dark:text-gray-400 
                         dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
-                onclick: move |_| shared_timer.write().pause(), 
+                onclick: move |_| shared_timer.write().stop(), 
                 "Pause" 
             }
             button { 
-                class: "w-1/3 text-purple-500 hover:text-purple-700 border 
-                        border-purple-500 focus:outline-none 
+                class: "w-1/3 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
                         font-medium rounded-lg text-sm px-5 py-2.5 text-center 
-                        mr-2 mb-2 dark:border-purple-400 dark:text-purple-400 
+                        m-1 dark:border-purple-400 dark:text-purple-400 
                         dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
-                onclick: move |_| shared_timer.write().resume(), 
+                onclick: move |_| shared_timer.write().start(), 
                 "Resume" 
+            }
+        }
+    ))
+}
+
+fn StartControls(cx: Scope) -> Element {
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+
+    cx.render(rsx! (
+        div { 
+            class: "p-1",
+            button { 
+                class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                        m-1 dark:border-gray-600 dark:text-gray-400 
+                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                onclick: move |_| shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)), 
+                "-" 
+            }
+            button { 
+                class: "w-40 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
+                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                        m-1 dark:border-purple-400 dark:text-purple-400 
+                        dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
+                onclick: move |_| shared_timer.write().start(), 
+                "Start" 
+            }
+            button { 
+                class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                        font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                        m-1 dark:border-gray-600 dark:text-gray-400 
+                        dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
+                onclick: move |_| shared_timer.write().increase_duration(Duration::from_secs(5 * 60)), 
+                "+" 
             }
         }
     ))
