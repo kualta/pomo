@@ -45,9 +45,9 @@ impl PomoTimer {
                 if let Duration::ZERO = self.work_duration {
                     return
                 }
-                if let Some(deadline) = Instant::now().checked_add(self.work_duration) {
-                    self.deadline = deadline;
-                }
+                self.deadline = Instant::now()
+                    .checked_add(self.work_duration)
+                    .unwrap_or_else(Instant::now);
             }
             TimerState::Paused(paused_at) => {
                 self.deadline += Instant::now()
@@ -68,32 +68,42 @@ impl PomoTimer {
     }
 
     fn update(&mut self) {
-        if self.time_left().is_zero() {
-            self.flip();
+        match self.state {
+            TimerState::Working |
+            TimerState::Resting => {
+                if self.time_left().is_zero() {
+                    self.flip();
+                }
+            },
+            _ => ()
         }
     }
 
     fn time_left(&self) -> Duration {
-        match self.deadline.checked_duration_since(Instant::now()) {
-            Some(time_left) => time_left,
-            None => Duration::ZERO,
-        }
+        self.deadline.checked_duration_since(Instant::now()).unwrap_or(Duration::ZERO)
     }
 
     /// Increases work duration of this [`PomoTimer`].
     /// 
     /// Rest duration is defined as `1/5` of the work duration
     fn increase_duration(&mut self, increase: Duration) {
-        self.work_duration = self.work_duration.checked_add(increase).unwrap_or(Duration::MAX);
-        self.rest_duration = self.work_duration / 5; 
+        let duration = self.work_duration.checked_add(increase).unwrap_or(Duration::MAX);
+        self.work_duration = duration;
+        self.rest_duration = duration / 5;
+        self.deadline = self.deadline.checked_add(increase).unwrap_or(return);
     }
 
     /// Decreases work duration of this [`PomoTimer`].
     /// 
     /// Rest duration is defined as `1/5` of the work duration
     fn decrease_duration(&mut self, decrease: Duration) {
-        self.work_duration = self.work_duration.checked_sub(decrease).unwrap_or(Duration::ZERO);
-        self.rest_duration = self.work_duration / 5; 
+        let mut duration = self.work_duration.checked_sub(decrease).unwrap_or(Duration::from_secs(5 * 60));
+        if duration < Duration::from_secs(5 * 60)  {
+            duration = Duration::from_secs(5 * 60);
+        }
+        self.work_duration = duration;
+        self.rest_duration = duration / 5;
+        self.deadline = self.deadline.checked_sub(decrease).unwrap_or(return);
     }
 
     /// Flips the state of this [`PomoTimer`] and extends the deadline 
@@ -125,11 +135,10 @@ impl PomoTimer {
 impl Display for PomoTimer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let time_left = match self.state {
-            TimerState::Paused(paused_at) => {
-                match self.deadline.checked_duration_since(paused_at) {
-                    Some(duration) => duration,
-                    None => Duration::ZERO,
-                }
+            TimerState::Paused(paused_at) => { 
+                self.deadline
+                    .checked_duration_since(paused_at)
+                    .unwrap_or(Duration::ZERO)
             }
             TimerState::Inactive => self.work_duration,
             _ => self.time_left(),
@@ -146,14 +155,23 @@ fn App(cx: Scope) -> Element {
         PomoTimer::new(Duration::from_secs(25 * 60), Duration::from_secs(5 * 60)) 
     });
     let shared_timer = use_context::<PomoTimer>(&cx)?;
-    let mut timer = shared_timer.write();
 
-    timer.update();
+    shared_timer.write().update();
 
     cx.render(rsx! (
         body {
             class: "text-center flex justify-center items-center h-screen 
                     bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
+            tabindex: "-1",
+            // FIXME: add listener on main body instead
+            onkeypress: move |evt| { 
+                match &*evt.key {
+                    "f" => shared_timer.write().flip(),
+                    "i" => shared_timer.write().increase_duration(Duration::from_secs(5 * 60)),
+                    "d" => shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)),
+                    _ => (),
+                }
+            },
             div { 
                 class: "w-96 items-center p-1",
                 Timer { }
@@ -166,8 +184,7 @@ fn App(cx: Scope) -> Element {
 fn TimerControls(cx: Scope) -> Element {
     let shared_timer = use_context::<PomoTimer>(&cx)?;
     let state = shared_timer.write().state;
-
-    let Controls = match state {
+    let controls = match state {
         TimerState::Inactive => {
             rsx!(
                 button { 
@@ -224,7 +241,7 @@ fn TimerControls(cx: Scope) -> Element {
     };
 
     cx.render(rsx! (
-        Controls
+            controls
     ))
 }
 
