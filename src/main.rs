@@ -2,6 +2,7 @@
 
 use async_std::task::sleep;
 use dioxus::{core::to_owned, prelude::*};
+use dioxus_helmet::Helmet;
 use instant::*;
 use wasm_bindgen::__rt::Start;
 use std::fmt::Display;
@@ -90,7 +91,9 @@ impl PomoTimer {
         let duration = self.work_duration.checked_add(increase).unwrap_or(Duration::MAX);
         self.work_duration = duration;
         self.rest_duration = duration / 5;
-        self.deadline = self.deadline.checked_add(increase).unwrap_or(return);
+        if let Some(deadline) = self.deadline.checked_add(increase) {
+            self.deadline = deadline;
+        }
     }
 
     /// Decreases work duration of this [`PomoTimer`].
@@ -103,7 +106,9 @@ impl PomoTimer {
         }
         self.work_duration = duration;
         self.rest_duration = duration / 5;
-        self.deadline = self.deadline.checked_sub(decrease).unwrap_or(return);
+        if let Some(deadline) = self.deadline.checked_sub(decrease) {
+            self.deadline = deadline;
+        }
     }
 
     /// Flips the state of this [`PomoTimer`] and extends the deadline 
@@ -174,9 +179,30 @@ fn App(cx: Scope) -> Element {
             },
             div { 
                 class: "w-96 items-center p-1",
+                PageIcon { }
                 Timer { }
                 TimerControls { }
             }
+        }
+    ))
+}
+
+fn PageIcon(cx: Scope) -> Element {
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+    let state = shared_timer.write().state;
+    let work_icon_path = "assets/icon_work.png";
+    let rest_icon_path = "assets/icon_rest.png";
+
+    let icon_path = match state {
+        TimerState::Inactive  |
+        TimerState::Working   => work_icon_path,
+        TimerState::Resting   |
+        TimerState::Paused(_) => rest_icon_path,
+    };
+
+    cx.render(rsx!(
+        Helmet {
+            link { rel: "icon", href: "{icon_path}"}
         }
     ))
 }
