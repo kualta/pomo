@@ -40,8 +40,6 @@ impl PomoTimer {
 
     fn start(&mut self) {
         match self.state {
-            TimerState::Working | 
-            TimerState::Resting => return,
             TimerState::Inactive => {
                 if let Duration::ZERO = self.work_duration {
                     return
@@ -49,15 +47,17 @@ impl PomoTimer {
                 self.deadline = Instant::now()
                     .checked_add(self.work_duration)
                     .unwrap_or_else(Instant::now);
+                self.state = TimerState::Working; 
             }
             TimerState::Paused(paused_at) => {
                 self.deadline += Instant::now()
                     .checked_duration_since(paused_at)
                     .unwrap_or(Duration::ZERO);
+                // FIXME: Incorrect if paused during rest
+                self.state = TimerState::Working; 
             }
-        };
-        // FIXME: Incorrect if paused during rest
-        self.state = TimerState::Working; 
+            _ => (),
+        }
     }
 
     fn stop(&mut self) {
@@ -66,6 +66,10 @@ impl PomoTimer {
             TimerState::Resting => self.state = TimerState::Paused(Instant::now()),
             _ => ()
         }
+    }
+
+    fn reset(&mut self) {
+        self.state = TimerState::Inactive;
     }
 
     fn update(&mut self) {
@@ -126,9 +130,22 @@ impl PomoTimer {
                 self.state = TimerState::Working;
                 Instant::now() + self.work_duration
             }
-            _ => return,
+            TimerState::Paused(_) => {
+                // FIXME: incorrect if paused at rest
+                self.state = TimerState::Working;
+                Instant::now() + self.work_duration
+            },
         };
         self.ring();
+    }
+
+    fn toggle_pause(&mut self) {
+        match self.state {
+            TimerState::Working   |
+            TimerState::Resting   => self.stop(),
+            TimerState::Paused(_) | 
+            TimerState::Inactive  => self.start(),
+        }
     }
 
     fn ring(&self) {
@@ -176,20 +193,77 @@ fn App(cx: Scope) -> Element {
             class: "text-center flex justify-center items-center h-screen 
                     bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
             tabindex: "-1",
-            // FIXME: add listener on main body instead
+            // FIXME: add listener on main body instead when dioxus implements portals ¯\_(ツ)_/¯
             onkeypress: move |evt| { 
                 match &*evt.key {
                     "f" => shared_timer.write().flip(),
                     "i" => shared_timer.write().increase_duration(Duration::from_secs(5 * 60)),
+                    "n" => shared_timer.write().reset(),
                     "d" => shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)),
+                    " " => shared_timer.write().toggle_pause(),
+                    "p" => shared_timer.write().toggle_pause(),
                     _ => (),
                 }
             },
             div { 
-                class: "w-96 items-center p-1",
+                class: "w-96 p-1",
                 PageIcon { path: icon_path.to_owned() }
                 Timer { }
                 TimerControls { }
+                HelpText { }
+                CreditsText { }
+            }
+        }
+    ))
+}
+
+fn CreditsText(cx: Scope) -> Element {
+    let emoji = use_state(&cx, || {
+        if now() as i64 % 2 == 0 { "🦀" } else { "❤️️" }
+    });
+
+    cx.render(rsx!(
+        div {
+            class: "block absolute bottom-5 right-5 text-gray-600 font-base ",
+            div { 
+                "made with {emoji} by ",
+                span { 
+                    class: "underline decoration-blue-500",
+                    a { href: "https://lectro.moe/", "lectro.moe"} 
+                }
+            }
+        }
+    ))
+
+}
+
+fn HelpText(cx: Scope) -> Element {
+    let shared_timer = use_context::<PomoTimer>(&cx)?;
+    let state = shared_timer.write().state;
+    match state {
+        TimerState::Inactive => (),
+        _ => return None
+    }
+
+    let kbd_css = "px-2 py-1 text-sm font-bold text-gray-800 
+    bg-purple-200 border border-gray-500 rounded-lg dark:bg-gray-600 
+    dark:text-gray-100 dark:border-gray-500";
+
+    cx.render(rsx!(
+        div {
+            class: "flex flex-col text-center",
+            div {
+                h3 { class: "pt-5 text-gray-800 font-medium", "Pro Gamer Tips: " }
+            }
+            div {
+                class: "flex-grow text-gray-700 dark:text-gray-500 text-lg text-left mx-auto",
+                    kbd { class: "{kbd_css}", "f" } " lip the timer" br { }
+                    kbd { class: "{kbd_css}", "i" } " ncrease duration" br { }
+                    kbd { class: "{kbd_css}", "n" } " ew timer" br { }
+                    kbd { class: "{kbd_css}", "d" } " ecrease duration" br { }
+                    kbd { class: "{kbd_css}", "p" } " ause " br { }
+                    kbd { class: "{kbd_css}", "Ctrl" } kbd { class: "{kbd_css}", "+" } " / "
+                    kbd { class: "{kbd_css}", "-" } " change size " br { }
             }
         }
     ))
@@ -211,8 +285,8 @@ fn TimerControls(cx: Scope) -> Element {
         TimerState::Inactive => {
             rsx!(
                 button { 
-                    class: "w-12 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                    class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                            font-medium rounded-lg text-sm px-4 py-2.5 text-center 
                             m-1 dark:border-gray-600 dark:text-gray-400 
                             dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
                     onclick: move |_| shared_timer.write().decrease_duration(Duration::from_secs(5 * 60)), 
@@ -220,15 +294,15 @@ fn TimerControls(cx: Scope) -> Element {
                 }
                 button { 
                     class: "w-1/2 text-purple-500 hover:text-purple-700 border border-purple-500 focus:outline-none 
-                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                            font-medium rounded-lg text-sm py-2.5 text-center 
                             m-1 dark:border-purple-400 dark:text-purple-400 
                             dark:hover:text-white dark:hover:bg-purple-500 dark:focus:ring-purple-900",
                     onclick: move |_| shared_timer.write().start(), 
                     "Start" 
                 }
                 button { 
-                    class: "w-12 text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
-                            font-medium rounded-lg text-sm px-5 py-2.5 text-center 
+                    class: "text-gray-500 hover:text-gray-700 border border-gray-800 focus:outline-none 
+                            font-mono font-medium rounded-lg text-sm px-4 py-2.5 text-center 
                             m-1 dark:border-gray-600 dark:text-gray-400 
                             dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-800",
                     onclick: move |_| shared_timer.write().increase_duration(Duration::from_secs(5 * 60)), 
