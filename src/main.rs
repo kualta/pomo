@@ -163,6 +163,14 @@ fn App(cx: Scope) -> Element {
 
     shared_timer.write().update();
 
+    let state = shared_timer.write().state;
+    let icon_path = match state {
+        TimerState::Inactive  |
+        TimerState::Working   => "assets/icon_work.png",
+        TimerState::Resting   |
+        TimerState::Paused(_) => "assets/icon_rest.png",
+    };
+
     cx.render(rsx! (
         body {
             class: "text-center flex justify-center items-center h-screen 
@@ -179,7 +187,7 @@ fn App(cx: Scope) -> Element {
             },
             div { 
                 class: "w-96 items-center p-1",
-                PageIcon { }
+                PageIcon { path: icon_path.to_owned() }
                 Timer { }
                 TimerControls { }
             }
@@ -187,22 +195,11 @@ fn App(cx: Scope) -> Element {
     ))
 }
 
-fn PageIcon(cx: Scope) -> Element {
-    let shared_timer = use_context::<PomoTimer>(&cx)?;
-    let state = shared_timer.write().state;
-    let work_icon_path = "assets/icon_work.png";
-    let rest_icon_path = "assets/icon_rest.png";
-
-    let icon_path = match state {
-        TimerState::Inactive  |
-        TimerState::Working   => work_icon_path,
-        TimerState::Resting   |
-        TimerState::Paused(_) => rest_icon_path,
-    };
-
+#[inline_props]
+fn PageIcon(cx: Scope, path: String) -> Element {
     cx.render(rsx!(
         Helmet {
-            link { rel: "icon", href: "{icon_path}"}
+            link { rel: "icon", href: "{path}"}
         }
     ))
 }
