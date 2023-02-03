@@ -8,7 +8,7 @@ use std::fmt::Display;
 use wasm_bindgen::__rt::Start;
 use web_sys::HtmlAudioElement;
 
-const PUBLIC_URL: &str = "/Pomodoro/";
+const PUBLIC_URL: &str = "/";
 
 #[derive(Clone, Copy)]
 enum TimerState {
@@ -201,7 +201,7 @@ fn App(cx: Scope) -> Element {
             class: "text-center flex justify-center items-center h-screen
                     bg-gradient-to-bl from-pink-300 via-purple-300 to-indigo-400",
             tabindex: "-1",
-            // FIXME: add listener on main body instead when dioxus implements portals ¯\_(ツ)_/¯
+            // FIXME: add listener on main body instead 
             onkeypress: move |evt| {
                 match &*evt.key {
                     "f" => shared_timer.write().flip(),
@@ -238,7 +238,7 @@ fn CreditsText(cx: Scope) -> Element {
                 "made with {emoji} by ",
                 span {
                     class: "underline decoration-blue-500",
-                    a { href: "https://lectro.moe/", "lectro.moe"}
+                    a { href: "https://kualta.dev/", "kualta"}
                 }
             }
         }

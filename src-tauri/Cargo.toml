@@ -1,8 +1,8 @@
 [package]
-name = "pomodoro-tauri"
+name = "pomo-tauri"
 version = "0.1.0"
 description = "Simple Pomo Timer"
-authors = ["lectromoe contact@lectro.moe"]
+authors = ["kualta contact@kualta.dev"]
 edition = "2021"
 
 [build-dependencies]
